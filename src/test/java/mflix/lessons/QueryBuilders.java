@@ -39,12 +39,6 @@ public class QueryBuilders extends AbstractLesson {
   @Test
   public void testContrastSingleFieldQuery() {
 
-    // Let's find a movie with Salma Hayek in it, composing a query directly
-    // with a Document, and an identical query with Filters builders. In
-    // the shell, this would be:
-    // db.movies.find({cast: "Salma Hayek"}).limit(1)
-
-    // First, we'll look at what the raw Document looks like
     Document onerousFilter = new Document("cast", "Salma Hayek");
     Document actual = moviesCollection.find(onerousFilter).limit(1).iterator().tryNext();
 
@@ -125,24 +119,9 @@ public class QueryBuilders extends AbstractLesson {
             Arrays.asList("Forrest Gump", "Toy Story", "Toy Story 2", "Saving Private Ryan")));
   }
 
-  /**
-   * Filters are powerful and easier to work compared to assembling a Document. We highly recommend
-   * you use them.
-   *
-   * <p>For more information about Filters and all that are available, see
-   * http://mongodb.github.io/mongo-java-driver/3.8/builders/filters/
-   *
-   * <p>Let's move onto Projections
-   *
-   * <p>Projections are very succinct and expressive, allowing us to say what we want. Let's look at
-   * an example.
-   */
   @Test
   public void testProjectionBuilder() {
-    // Let's now look at Projections. In the projection we'll specify
-    // we want only the title and year fields, and "forget" to project
-    // away the _id field.
-    // In the shell, this would be:
+
     // db.movies.find({cast: "Salma Hayek"}, { title: 1, year: 1 })
 
     Document oldFilter = new Document("cast", "Salma Hayek");
