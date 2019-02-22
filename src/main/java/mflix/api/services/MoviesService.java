@@ -253,6 +253,7 @@ public class MoviesService {
         return false;
       }
       if (!email.equals(currentComment.getEmail())) {
+      //if (!email.equals(updateComment.getEmail())) {
         results.put(
             "error", "Could not update comment. Not authorized to update comments of other users");
         return false;
