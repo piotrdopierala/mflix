@@ -1,5 +1,6 @@
 package mflix.api.daos;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoWriteException;
 import com.mongodb.WriteConcern;
@@ -12,6 +13,7 @@ import com.mongodb.client.result.DeleteResult;
 import com.mongodb.client.result.UpdateResult;
 import mflix.api.models.Session;
 import mflix.api.models.User;
+import org.bson.BsonString;
 import org.bson.Document;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
@@ -28,6 +30,7 @@ import java.util.NoSuchElementException;
 
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
+import static com.mongodb.client.model.Updates.*;
 
 @Configuration
 public class UserDao extends AbstractMFlixDao {
@@ -35,7 +38,7 @@ public class UserDao extends AbstractMFlixDao {
     private final MongoCollection<User> usersCollection;
     //TODO> Ticket: User Management - do the necessary changes so that the sessions collection
     //returns a Session object
-    private final MongoCollection<Document> sessionsCollection;
+    private final MongoCollection<Session> sessionsCollection;
 
     private final Logger log;
 
@@ -52,7 +55,7 @@ public class UserDao extends AbstractMFlixDao {
         log = LoggerFactory.getLogger(this.getClass());
         //TODO> Ticket: User Management - implement the necessary changes so that the sessions
         // collection returns a Session objects instead of Document objects.
-        sessionsCollection = db.getCollection("sessions");
+        sessionsCollection = db.getCollection("sessions", Session.class).withCodecRegistry(pojoCodecRegistry);
     }
 
     /**
@@ -62,8 +65,10 @@ public class UserDao extends AbstractMFlixDao {
      * @return True if successful, throw IncorrectDaoOperation otherwise
      */
     public boolean addUser(User user) {
-        //TODO > Ticket: Durable Writes -  you might want to use a more durable write concern here!
-        usersCollection.insertOne(user);
+        // Ticket: Durable Writes -  you might want to use a more durable write concern here!
+
+        MongoCollection<User> userMongoCollection = usersCollection.withWriteConcern(WriteConcern.W1);
+        userMongoCollection.insertOne(user);
         return true;
         //TODO > Ticket: Handling Errors - make sure to only add new users
         // and not users that already exist.
@@ -81,10 +86,24 @@ public class UserDao extends AbstractMFlixDao {
         //TODO> Ticket: User Management - implement the method that allows session information to be
         // stored in it's designated collection.
 
-        Document doc = new Document("user_id", userId);
-        doc.put("jwt", jwt);
-        sessionsCollection.insertOne(doc);
+        if (userId == null || jwt == null) {
+            return false;
+        }
+
+        if (getUser(userId) == null) {
+            return false;
+        }
+
+        final Bson filter = Filters.eq("user_id", userId);
+        final Session oldSession = sessionsCollection.find(filter).limit(1).first();
+        if (oldSession == null) {
+            final Session session = new Session();
+            session.setUserId(userId);
+            session.setJwt(jwt);
+            sessionsCollection.insertOne(session);
+        }
         return true;
+
         //TODO > Ticket: Handling Errors - implement a safeguard against
         // creating a session with the same jwt token.
     }
@@ -97,12 +116,12 @@ public class UserDao extends AbstractMFlixDao {
      */
     public User getUser(String email) {
         User user = null;
-        //TODO> Ticket: User Management - implement the query that returns the first User object.
+        //Ticket: User Management - implement the query that returns the first User object.
         Document queryFilter = new Document("email", email);
         try {
             user = usersCollection.find(queryFilter).limit(1).iterator().next();
             return user;
-        }catch (NoSuchElementException noElEx){
+        } catch (NoSuchElementException noElEx) {
             return null;
         }
     }
@@ -118,15 +137,9 @@ public class UserDao extends AbstractMFlixDao {
         // userId
         Document queryFilter = new Document("user_id", userId);
         try {
-            Document next = sessionsCollection.find(queryFilter).limit(1).iterator().next();
-            if (!next.isEmpty()) {
-                Session session = new Session();
-                session.setJwt(next.get("jwt").toString());
-                session.setUserId(next.get("user_id").toString());
-                return session;
-            } else
-                return null;
-        }catch (NoSuchElementException noElEx){
+            Session session = sessionsCollection.find(queryFilter).limit(1).iterator().next();
+            return session;
+        } catch (NoSuchElementException noElEx) {
             return null;
         }
     }
@@ -168,6 +181,11 @@ public class UserDao extends AbstractMFlixDao {
     public boolean updateUserPreferences(String email, Map<String, ?> userPreferences) {
         //TODO> Ticket: User Preferences - implement the method that allows for user preferences to
         // be updated.
+        Bson filter = Filters.eq("email", email);
+
+        UpdateResult preferences = usersCollection.updateOne(filter, set("preferences", userPreferences));
+        if(preferences.wasAcknowledged())
+            return true;
         //TODO > Ticket: Handling Errors - make this method more robust by
         // handling potential exceptions when updating an entry.
         return false;
