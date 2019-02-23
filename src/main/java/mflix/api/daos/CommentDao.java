@@ -4,8 +4,10 @@ import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoWriteException;
 import com.mongodb.ReadConcern;
 import com.mongodb.WriteConcern;
+import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
 import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
@@ -28,9 +30,16 @@ import org.springframework.stereotype.Component;
 
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
+import static com.mongodb.client.model.Accumulators.sum;
+import static com.mongodb.client.model.Aggregates.group;
+import static com.mongodb.client.model.Aggregates.limit;
+import static com.mongodb.client.model.Aggregates.sort;
+import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Sorts.descending;
 import static com.mongodb.client.model.Updates.set;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
@@ -116,8 +125,8 @@ public class CommentDao extends AbstractMFlixDao {
         // user own comments
 
         Bson filter = Filters.and(
-                Filters.eq("email", email),
-                Filters.eq("_id", new ObjectId(commentId))
+                eq("email", email),
+                eq("_id", new ObjectId(commentId))
         );
 
         UpdateResult preferences = commentCollection.updateOne(filter, set("text", text));
@@ -140,8 +149,8 @@ public class CommentDao extends AbstractMFlixDao {
         // comment
         // TIP: make sure to match only users that own the given commentId
         Bson filter = Filters.and(
-                Filters.eq("email", email),
-                Filters.eq("_id", new ObjectId(commentId))
+                eq("email", email),
+                eq("_id", new ObjectId(commentId))
         );
 
         DeleteResult deleteResult = commentCollection.deleteOne(filter);
@@ -171,6 +180,22 @@ public class CommentDao extends AbstractMFlixDao {
         // // guarantee for the returned documents. Once a commenter is in the
         // // top 20 of users, they become a Critic, so mostActive is composed of
         // // Critic objects.
+        MongoCollection<Document> commentCollection = db.getCollection("comments").withReadConcern(ReadConcern.MAJORITY);
+        List<Bson> filter = Arrays.asList(
+                group(eq("email", "$email"), sum("count", 1L))
+                , sort(descending("count")), limit(20));
+        MongoCursor<Document> iterator = commentCollection.aggregate(filter).iterator();
+        iterator.forEachRemaining(x->{
+            Critic c = new Critic();
+            c.setId((((Document)x.get("_id")).get("email")).toString());
+            c.setNumComments(Integer.parseInt(x.get("count").toString()));
+            mostActive.add(c);
+        });
+//
+//        iterator.forEachRemaining(tc->{
+//            mostActive.add(new Critic(tc.get("email").toString(),Integer.parseInt(tc.get("count").toString())));
+//        });
+
         return mostActive;
     }
 }
