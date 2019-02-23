@@ -75,7 +75,6 @@ public class MovieDao extends AbstractMFlixDao {
 
         List<Bson> pipeline = new ArrayList<>();
         // match stage to find movie
-        System.out.println(movieId);
         Bson match = match(Filters.eq("_id", new ObjectId(movieId)));
 
         pipeline.add(match);
